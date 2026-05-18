@@ -2,8 +2,8 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Campus Navigation - Interaktiv</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>3D Campus Navigation - Staffbase Fullscreen</title>
     
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
@@ -15,61 +15,125 @@
             --surface: #ffffff;
             --text: #111827;
             --text-light: #6b7280;
+            --safe-top: env(safe-area-inset-top, 20px);
+            --safe-bottom: env(safe-area-inset-bottom, 20px);
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-        body, html { width: 100%; height: 100%; overflow: hidden; background-color: #d1d5db; }
-        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        /* * FULLSCREEN WEBVIEW FIXES 
+         */
+        * { 
+            box-sizing: border-box; 
+            margin: 0; 
+            padding: 0; 
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body { 
+            /* Zwingt den Body, exakt die verfügbare App-Fläche zu nutzen, ohne Scrollen */
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: hidden; 
+            background-color: #d1d5db; 
+            user-select: none;
+            -webkit-user-select: none;
+            overscroll-behavior: none; /* Verhindert Pull-to-Refresh in WebViews */
+        }
+
+        #map { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+        }
 
         /* Search Bar */
         .top-bar {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            width: 90%; max-width: 400px; z-index: 10;
-            background: var(--surface); border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-            display: flex; padding: 12px 16px; align-items: center;
+            position: absolute; 
+            top: max(var(--safe-top), 15px); 
+            left: 50%; 
+            transform: translateX(-50%);
+            width: 92%; 
+            max-width: 500px; 
+            z-index: 10;
+            background: var(--surface); 
+            border-radius: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex; 
+            padding: 14px 16px; 
+            align-items: center;
         }
-        .top-bar input { border: none; outline: none; width: 100%; font-size: 16px; background: transparent; }
+        .top-bar input { 
+            border: none; outline: none; width: 100%; 
+            font-size: 16px; background: transparent; color: var(--text);
+            user-select: auto; -webkit-user-select: auto;
+        }
 
         /* Filter Chips */
         .poi-chips {
-            position: absolute; top: 80px; left: 20px; right: 20px; z-index: 10;
-            display: flex; gap: 8px; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none;
+            position: absolute; 
+            top: calc(max(var(--safe-top), 15px) + 65px); 
+            left: 0; 
+            width: 100%; 
+            z-index: 10;
+            display: flex; 
+            gap: 10px; 
+            overflow-x: auto; 
+            padding: 5px 4% 15px 4%; 
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
         }
         .poi-chips::-webkit-scrollbar { display: none; }
         .chip {
-            background: var(--surface); padding: 8px 12px; border-radius: 20px;
-            font-size: 13px; font-weight: 500; white-space: nowrap;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; transition: 0.2s;
+            background: var(--surface); padding: 10px 16px; border-radius: 20px;
+            font-size: 14px; font-weight: 500; white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; 
+            transition: all 0.2s ease; color: var(--text);
         }
+        .chip:active { transform: scale(0.95); }
         .chip.active { background: var(--primary); color: white; }
 
         /* Bottom Panel */
         .bottom-panel {
-            position: absolute; bottom: -150%; left: 0; width: 100%;
-            background: var(--surface); border-radius: 24px 24px 0 0;
-            padding: 24px 20px; z-index: 20; box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
-            transition: bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: absolute; 
+            bottom: -150%; 
+            left: 0; 
+            width: 100%;
+            background: var(--surface); 
+            border-radius: 24px 24px 0 0;
+            padding: 24px 20px max(var(--safe-bottom), 24px) 20px; 
+            z-index: 20; 
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+            transition: bottom 0.4s cubic-bezier(0.3, 1, 0.3, 1);
         }
         .bottom-panel.visible { bottom: 0; }
-        .panel-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
-        .panel-title { font-size: 18px; font-weight: 600; }
-        .panel-subtitle { font-size: 14px; color: var(--text-light); margin-top: 4px; }
-        .close-btn { background: #f3f4f6; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; }
+        .panel-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+        .panel-title { font-size: 20px; font-weight: 600; color: var(--text); }
+        .panel-subtitle { font-size: 15px; color: var(--text-light); margin-top: 4px; }
+        .close-btn { 
+            background: #f3f4f6; border: none; border-radius: 50%; 
+            width: 36px; height: 36px; cursor: pointer; display: flex; 
+            align-items: center; justify-content: center; font-size: 16px; 
+        }
         .btn-nav {
             width: 100%; background: var(--primary); color: white; border: none;
-            padding: 14px; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 16px; border-radius: 14px; font-size: 16px; font-weight: 600; 
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
         }
 
         /* Markers */
         .custom-marker {
-            width: 32px; height: 32px; background: var(--primary);
+            width: 36px; height: 36px; background: var(--primary);
             border: 3px solid white; border-radius: 50%; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
             display: flex; align-items: center; justify-content: center; cursor: pointer;
             transition: transform 0.2s, opacity 0.3s;
         }
-        .custom-marker:hover { transform: scale(1.1); }
         .custom-marker.hidden { opacity: 0; pointer-events: none; transform: scale(0); }
         
         .marker-ev { background: #10b981; }
@@ -82,13 +146,13 @@
     <div id="map"></div>
 
     <div class="top-bar">
-        <svg style="width:20px;height:20px;margin-right:12px;color:#6b7280" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-        <input type="text" id="searchInput" placeholder="Suchen (z.B. Gebäude A, Mensa)...">
+        <svg style="width:20px;height:20px;margin-right:12px;color:#6b7280;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        <input type="text" id="searchInput" placeholder="Suchen (z.B. Gebäude A)...">
     </div>
 
     <div class="poi-chips" id="filterContainer">
-        <div class="chip active" data-filter="all">Alle anzeigen</div>
-        <div class="chip" data-filter="ev">⚡ E-Ladesäulen</div>
+        <div class="chip active" data-filter="all">Alle</div>
+        <div class="chip" data-filter="ev">⚡ Ladesäulen</div>
         <div class="chip" data-filter="food">🍽️ Mensa</div>
         <div class="chip" data-filter="building">🏢 Gebäude</div>
     </div>
@@ -110,7 +174,6 @@
     <script>
         const campusCenter = [9.2185, 49.1455];
 
-        // 1. KARTE INITIALISIEREN
         const map = new maplibregl.Map({
             container: 'map',
             center: campusCenter,
@@ -126,7 +189,10 @@
             }
         });
 
-        // 2. DATEN: GEBÄUDE (Erweitert mit Titel & Info für den Klick auf 3D-Modelle)
+        // WICHTIG FÜR MOBILE WEBVIEWS: Bei Resize (z.B. Tastatur einblenden) Karte updaten
+        window.addEventListener('resize', () => map.resize());
+        map.on('dragstart', () => { document.activeElement.blur(); });
+
         const mockBuildings = {
             'type': 'FeatureCollection',
             'features': [
@@ -148,7 +214,6 @@
             ]
         };
 
-        // 3. DATEN: POIs (Erweitert mit Such-Keywords)
         const pois = [
             { id: 1, type: 'ev', coords: [9.2165, 49.1435], title: 'E-Ladesäule P1', sub: '4 Plätze frei • 22kW', icon: '⚡', keywords: 'laden strom auto parken' },
             { id: 2, type: 'food', coords: [9.2215, 49.1485], title: 'Mensa Bildungscampus', sub: 'Geöffnet bis 14:00 Uhr', icon: '🍽️', keywords: 'essen kantine food' },
@@ -159,14 +224,12 @@
         let activeMarkers = [];
 
         map.on('load', () => {
-            // Boden
             map.addSource('campus-ground', {
                 'type': 'geojson',
                 'data': { 'type': 'Feature', 'geometry': { 'type': 'Polygon', 'coordinates': [[[9.2100, 49.1350], [9.2300, 49.1350], [9.2300, 49.1550], [9.2100, 49.1550], [9.2100, 49.1350]]] } }
             });
             map.addLayer({ 'id': 'ground-layer', 'type': 'fill', 'source': 'campus-ground', 'paint': { 'fill-color': '#dcfce7' } });
 
-            // 3D Gebäude Layer
             map.addSource('buildings', { 'type': 'geojson', 'data': mockBuildings });
             map.addLayer({
                 'id': '3d-buildings',
@@ -180,51 +243,37 @@
                 }
             });
 
-            // Mache 3D Gebäude klickbar
             map.on('click', '3d-buildings', (e) => {
                 const props = e.features[0].properties;
                 openPanel(props.title, props.sub, e.lngLat.toArray());
             });
 
-            // Mauszeiger ändern, wenn man über ein Gebäude hovert
-            map.on('mouseenter', '3d-buildings', () => { map.getCanvas().style.cursor = 'pointer'; });
-            map.on('mouseleave', '3d-buildings', () => { map.getCanvas().style.cursor = ''; });
-
             renderMarkers();
             addMockRoute();
         });
-
-        // --------------------------------------------------------
-        // FUNKTIONEN FÜR MARKER, UI & INTERAKTION
-        // --------------------------------------------------------
 
         function renderMarkers() {
             pois.forEach(poi => {
                 const el = document.createElement('div');
                 el.className = `custom-marker marker-${poi.type}`;
-                el.innerHTML = `<span style="color:white; font-size:14px;">${poi.icon}</span>`;
+                el.innerHTML = `<span style="color:white; font-size:16px;">${poi.icon}</span>`;
 
-                el.addEventListener('click', () => {
-                    openPanel(poi.title, poi.sub, poi.coords);
-                });
-
+                el.addEventListener('click', () => { openPanel(poi.title, poi.sub, poi.coords); });
                 const marker = new maplibregl.Marker(el).setLngLat(poi.coords).addTo(map);
                 activeMarkers.push({ data: poi, element: el, mapboxMarker: marker });
             });
         }
 
-        // Info-Panel öffnen und Kamera animieren
-        let currentTargetCoords = null; // Speichert Ziel für Navigation
+        let currentTargetCoords = null;
         
         function openPanel(title, sub, coords) {
+            document.activeElement.blur(); 
             document.getElementById('poiTitle').innerText = title;
             document.getElementById('poiSub').innerText = sub;
             document.getElementById('infoPanel').classList.add('visible');
             currentTargetCoords = coords;
             
-            map.flyTo({ center: coords, zoom: 17.5, pitch: 65, duration: 1500 });
-            
-            // Verstecke Route falls aktiv
+            map.flyTo({ center: coords, zoom: 17.2, pitch: 55, duration: 1200 });
             if (map.getLayer('route')) map.setLayoutProperty('route', 'visibility', 'none');
         }
 
@@ -234,14 +283,11 @@
             if (map.getLayer('route')) map.setLayoutProperty('route', 'visibility', 'none');
         }
 
-        // --- FILTER LOGIK (CHIPS) ---
         document.querySelectorAll('.chip').forEach(chip => {
             chip.addEventListener('click', (e) => {
-                // UI Update
                 document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
                 e.target.classList.add('active');
 
-                // Marker filtern
                 const filterType = e.target.getAttribute('data-filter');
                 activeMarkers.forEach(item => {
                     if (filterType === 'all' || item.data.type === filterType) {
@@ -253,32 +299,18 @@
             });
         });
 
-        // --- LIVE SUCHE LOGIK ---
         document.getElementById('searchInput').addEventListener('input', (e) => {
             const query = e.target.value.toLowerCase().trim();
-            if (query.length < 2) return; // Erst ab 2 Zeichen suchen
+            if (query.length < 2) return;
 
-            // POIs durchsuchen (Titel oder Keywords)
-            const match = pois.find(p => 
-                p.title.toLowerCase().includes(query) || 
-                p.keywords.includes(query)
-            );
-
-            if (match) {
-                openPanel(match.title, match.sub, match.coords);
-            }
+            const match = pois.find(p => p.title.toLowerCase().includes(query) || p.keywords.includes(query));
+            if (match) openPanel(match.title, match.sub, match.coords);
         });
 
-        // --- NAVIGATION MOCK ---
         function addMockRoute() {
-            map.addSource('route', {
-                'type': 'geojson',
-                'data': { 'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': [] } }
-            });
+            map.addSource('route', { 'type': 'geojson', 'data': { 'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': [] } } });
             map.addLayer({
-                'id': 'route',
-                'type': 'line',
-                'source': 'route',
+                'id': 'route', 'type': 'line', 'source': 'route',
                 'layout': { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
                 'paint': { 'line-color': '#0066ff', 'line-width': 6, 'line-opacity': 0.8 }
             });
@@ -286,18 +318,15 @@
 
         function startNavigation() {
             document.getElementById('infoPanel').classList.remove('visible');
-            
-            // Simuliere dynamische Route vom Startpunkt zum Ziel
             if(currentTargetCoords) {
-                const start = [9.2135, 49.1425]; // Fiktiver Start (z.B. User GPS)
+                const start = [9.2135, 49.1425]; 
                 map.getSource('route').setData({
                     'type': 'Feature',
                     'geometry': { 'type': 'LineString', 'coordinates': [start, currentTargetCoords] }
                 });
             }
-
             map.setLayoutProperty('route', 'visibility', 'visible');
-            map.flyTo({ center: [9.2165, 49.1440], zoom: 18.2, pitch: 70, bearing: -30, speed: 0.5 });
+            map.flyTo({ center: [9.2165, 49.1440], zoom: 17.5, pitch: 65, bearing: -30, speed: 0.6 });
         }
     </script>
 </body>
