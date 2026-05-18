@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>3D Campus Navigation - Final Fix</title>
+    <title>3D Campus Navigation - Final Route Fix</title>
     
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
@@ -34,7 +34,7 @@
         /* Search & Top UI */
         .search-container {
             position: absolute; top: max(var(--safe-top), 15px); left: 50%; transform: translateX(-50%);
-            width: 92%; max-width: 500px; z-index: 20; pointer-events: none; /* Container blockiert keine Klicks */
+            width: 92%; max-width: 500px; z-index: 20; pointer-events: none;
         }
 
         .top-bar {
@@ -57,17 +57,17 @@
         .result-title { font-weight: 600; font-size: 15px; color: var(--text-main); }
         .result-sub { font-size: 12px; color: var(--text-muted); }
 
-        /* Filter Chips - Jetzt als echte Buttons für WebView-Kompatibilität */
+        /* Filter Chips */
         .poi-chips {
             position: absolute; top: calc(max(var(--safe-top), 15px) + 65px); left: 0; width: 100%; 
             z-index: 10; display: flex; gap: 10px; overflow-x: auto; padding: 5px 4% 15px 4%; scrollbar-width: none; -webkit-overflow-scrolling: touch;
-            pointer-events: none; /* Container selbst blockiert keine Klicks auf die Map */
+            pointer-events: none;
         }
         .poi-chips::-webkit-scrollbar { display: none; }
         .chip {
             background: var(--surface); padding: 10px 16px; border-radius: 20px; font-size: 14px; font-weight: 500; 
             white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: 0.2s; color: var(--text-main);
-            border: none; outline: none; pointer-events: auto; /* Buttons sind anklickbar */
+            border: none; outline: none; pointer-events: auto;
         }
         .chip.active { background: var(--primary); color: white; }
 
@@ -89,7 +89,7 @@
 
         /* Routing Steps */
         .route-steps-container {
-            display: none; margin-top: 20px; overflow-y: auto; padding-right: 10px; border-top: 1px solid var(--border); padding-top: 16px;
+            display: none; margin-top: 20px; overflow-y: auto; padding-right: 10px; border-top: 1px solid var(--border); padding-top: 16px; max-height: 40vh;
         }
         .route-steps-container.active { display: block; }
         .route-step { display: flex; gap: 12px; margin-bottom: 16px; }
@@ -109,7 +109,7 @@
         /* User GPS Position Marker */
         .user-location {
             width: 20px; height: 20px; background: #0066ff; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(0,102,255,0.5); position: relative;
-            pointer-events: none; /* Blockiert keine Klicks */
+            pointer-events: none;
         }
         .user-location::after {
             content: ''; position: absolute; top: -10px; left: -10px; width: 34px; height: 34px; background: rgba(0,102,255,0.4); border-radius: 50%; animation: pulse 2s infinite ease-out;
@@ -185,7 +185,6 @@
             ]
         };
 
-        // RUNDE MARKER POIs
         const pois = [
             { id: 1, type: 'building', coords: [9.2185, 49.1455], title: 'Gebäude T (Liv)', sub: 'Zentrale Bibliothek', icon: '🏢', keywords: 't liv bibliothek lernen' },
             { id: 2, type: 'building', coords: [9.2150, 49.1460], title: 'Gebäude A', sub: 'Haupteingang & Empfang', icon: '🏢', keywords: 'a haupt empfang' },
@@ -212,15 +211,10 @@
             map.on('click', '3d-buildings', (e) => {
                 if (!e.features || e.features.length === 0) return;
                 const props = e.features[0].properties;
-                const buildingPoi = {
-                    title: props.title,
-                    sub: props.sub,
-                    coords: e.lngLat.toArray()
-                };
+                const buildingPoi = { title: props.title, sub: props.sub, coords: e.lngLat.toArray() };
                 openPanel(buildingPoi);
             });
 
-            // Mauszeiger über Gebäude
             map.on('mouseenter', '3d-buildings', () => { map.getCanvas().style.cursor = 'pointer'; });
             map.on('mouseleave', '3d-buildings', () => { map.getCanvas().style.cursor = ''; });
 
@@ -235,7 +229,6 @@
             new maplibregl.Marker(el).setLngLat(userLocation).addTo(map);
         }
 
-        // 3. MARKER LOGIK (Robuster Event-Handler für Mobile)
         function renderMarkers() {
             pois.forEach(poi => {
                 const el = document.createElement('div');
@@ -244,11 +237,10 @@
 
                 const handleMarkerClick = (e) => {
                     e.preventDefault();
-                    e.stopPropagation(); // Stoppt das Durchdrücken auf die Karte
+                    e.stopPropagation(); 
                     openPanel(poi);
                 };
 
-                // Sowohl Klick als auch Touch-Events binden
                 el.addEventListener('click', handleMarkerClick);
                 el.addEventListener('touchstart', handleMarkerClick, { passive: false });
 
@@ -257,10 +249,9 @@
             });
         }
 
-        // 4. FILTER BUTTONS (Nutzt jetzt MapLibre Native Remove/Add)
+        // FILTER BUTTONS
         const filterButtons = document.querySelectorAll('.chip');
         filterButtons.forEach(btn => {
-            // Auch hier Klick + Touchstart zur Sicherheit
             const handleFilterClick = function(e) {
                 e.preventDefault();
                 filterButtons.forEach(c => c.classList.remove('active'));
@@ -269,10 +260,7 @@
                 const filterType = this.getAttribute('data-filter');
                 
                 activeMarkers.forEach(item => {
-                    // Entferne den Marker sicher von der Karte
                     item.markerObj.remove();
-
-                    // Füge ihn wieder hinzu, wenn der Filter passt
                     if (filterType === 'all' || item.data.type === filterType) {
                         item.markerObj.addTo(map);
                     }
@@ -283,7 +271,7 @@
             btn.addEventListener('touchstart', handleFilterClick, { passive: false });
         });
 
-        // 5. SUCHEN MIT DROPDOWN
+        // SUCHEN MIT DROPDOWN
         const searchInput = document.getElementById('searchInput');
         const searchResults = document.getElementById('searchResults');
 
@@ -322,7 +310,7 @@
             }
         });
 
-        // 6. BOTTOM PANEL & ROUTING
+        // BOTTOM PANEL & ROUTING
         const infoPanel = document.getElementById('infoPanel');
         const routeStepsContainer = document.getElementById('routeSteps');
         const navBtn = document.getElementById('navBtn');
@@ -332,50 +320,84 @@
             document.getElementById('poiTitle').innerText = poi.title;
             document.getElementById('poiSub').innerText = poi.sub;
             
-            // Reset UI
+            // UI Resetten
             routeStepsContainer.classList.remove('active');
             navBtn.style.display = 'flex';
             infoPanel.classList.add('visible');
             
             map.flyTo({ center: poi.coords, zoom: 17.5, pitch: 60, duration: 1200 });
-            if (map.getLayer('route')) map.setLayoutProperty('route', 'visibility', 'none');
+            
+            // Route verstecken falls aktiv
+            if (map.getLayer('route-line')) {
+                map.setLayoutProperty('route-outline', 'visibility', 'none');
+                map.setLayoutProperty('route-line', 'visibility', 'none');
+            }
         }
 
         function closePanel() {
             infoPanel.classList.remove('visible');
             currentTargetPoi = null;
-            if (map.getLayer('route')) map.setLayoutProperty('route', 'visibility', 'none');
+            if (map.getLayer('route-line')) {
+                map.setLayoutProperty('route-outline', 'visibility', 'none');
+                map.setLayoutProperty('route-line', 'visibility', 'none');
+            }
             map.flyTo({ center: campusCenter, zoom: 16, pitch: 50 });
         }
 
+        // INITIALISIERT DIE ROUTEN-EBENEN (Weißer Hintergrund für Kontrast + Blaue Linie)
         function initRoutingLayer() {
             map.addSource('route', { 'type': 'geojson', 'data': { 'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': [] } } });
-            map.addLayer({ 'id': 'route', 'type': 'line', 'source': 'route', 'layout': { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' }, 'paint': { 'line-color': '#0066ff', 'line-width': 6, 'line-opacity': 0.8 } });
+            
+            // Weißes Outline (Casing), damit die Route sich von Gebäuden abhebt
+            map.addLayer({ 
+                'id': 'route-outline', 'type': 'line', 'source': 'route', 
+                'layout': { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' }, 
+                'paint': { 'line-color': '#ffffff', 'line-width': 10, 'line-opacity': 0.9 } 
+            });
+            // Eigentliche blaue Route
+            map.addLayer({ 
+                'id': 'route-line', 'type': 'line', 'source': 'route', 
+                'layout': { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' }, 
+                'paint': { 'line-color': '#0066ff', 'line-width': 6, 'line-opacity': 1 } 
+            });
+        }
+
+        // ERZEUGT EINEN REALISTISCHEN WEG (Nicht einfach quer durch die Gebäude)
+        function getMockRoute(start, end) {
+            const midX = (start[0] + end[0]) / 2;
+            // Einfacher abgewinkelter Pfad anstatt Luftlinie
+            return [
+                start,
+                [midX, start[1]], // Gehe erst auf X Achse
+                [midX, end[1]],   // Dann auf Y Achse
+                end
+            ];
         }
 
         function startNavigation() {
             if(!currentTargetPoi) return;
 
+            // 1. Berechne Route und aktualisiere Geometrie
+            const routeCoords = getMockRoute(userLocation, currentTargetPoi.coords);
             map.getSource('route').setData({
-                'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': [userLocation, currentTargetPoi.coords] }
+                'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': routeCoords }
             });
-            map.setLayoutProperty('route', 'visibility', 'visible');
 
-            const midLng = (userLocation[0] + currentTargetPoi.coords[0]) / 2;
-            const midLat = (userLocation[1] + currentTargetPoi.coords[1]) / 2;
-            
-            map.flyTo({ center: [midLng, midLat], zoom: 16.8, pitch: 70, bearing: -20, speed: 0.8 });
+            // 2. Mache beide Linien (Outline + Blau) sichtbar
+            map.setLayoutProperty('route-outline', 'visibility', 'visible');
+            map.setLayoutProperty('route-line', 'visibility', 'visible');
 
+            // 3. UI updaten
             navBtn.style.display = 'none';
             routeStepsContainer.innerHTML = `
                 <div style="font-weight:600; margin-bottom:12px; color:var(--text-main);">Wegbeschreibung</div>
                 <div class="route-step">
                     <div class="step-icon">1</div>
-                    <div class="step-text">Start am Haupteingang (Dein Standort). Folge dem Hauptweg in Richtung Zentrum.</div>
+                    <div class="step-text">Start am Haupteingang (Dein Standort). Folge dem Weg.</div>
                 </div>
                 <div class="route-step">
                     <div class="step-icon">2</div>
-                    <div class="step-text">Gehe weiter geradeaus, der blauen Linie nach.</div>
+                    <div class="step-text">Folge der blauen Markierung auf der Karte.</div>
                 </div>
                 <div class="route-step">
                     <div class="step-icon">3</div>
@@ -383,6 +405,16 @@
                 </div>
             `;
             routeStepsContainer.classList.add('active');
+
+            // 4. Kamera dynamisch anpassen, damit die GANZE Route sichtbar ist!
+            const bounds = new maplibregl.LngLatBounds();
+            routeCoords.forEach(coord => bounds.extend(coord));
+            
+            map.fitBounds(bounds, {
+                padding: { top: 100, bottom: 350, left: 50, right: 50 }, // Bottom-Padding ist groß wegen dem offenen UI Panel!
+                pitch: 45, // Etwas flacherer Winkel, damit Gebäude die Linie nicht verdecken
+                duration: 1500
+            });
         }
     </script>
 </body>
