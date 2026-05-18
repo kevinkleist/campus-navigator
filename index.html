@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Campus Navigation - Interaktiv</title>
+    
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary: #0066ff;
+            --surface: #ffffff;
+            --text: #111827;
+            --text-light: #6b7280;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background-color: #d1d5db; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+
+        /* Search Bar */
+        .top-bar {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            width: 90%; max-width: 400px; z-index: 10;
+            background: var(--surface); border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            display: flex; padding: 12px 16px; align-items: center;
+        }
+        .top-bar input { border: none; outline: none; width: 100%; font-size: 16px; background: transparent; }
+
+        /* Filter Chips */
+        .poi-chips {
+            position: absolute; top: 80px; left: 20px; right: 20px; z-index: 10;
+            display: flex; gap: 8px; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none;
+        }
+        .poi-chips::-webkit-scrollbar { display: none; }
+        .chip {
+            background: var(--surface); padding: 8px 12px; border-radius: 20px;
+            font-size: 13px; font-weight: 500; white-space: nowrap;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; transition: 0.2s;
+        }
+        .chip.active { background: var(--primary); color: white; }
+
+        /* Bottom Panel */
+        .bottom-panel {
+            position: absolute; bottom: -150%; left: 0; width: 100%;
+            background: var(--surface); border-radius: 24px 24px 0 0;
+            padding: 24px 20px; z-index: 20; box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+            transition: bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .bottom-panel.visible { bottom: 0; }
+        .panel-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+        .panel-title { font-size: 18px; font-weight: 600; }
+        .panel-subtitle { font-size: 14px; color: var(--text-light); margin-top: 4px; }
+        .close-btn { background: #f3f4f6; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; }
+        .btn-nav {
+            width: 100%; background: var(--primary); color: white; border: none;
+            padding: 14px; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+
+        /* Markers */
+        .custom-marker {
+            width: 32px; height: 32px; background: var(--primary);
+            border: 3px solid white; border-radius: 50%; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            transition: transform 0.2s, opacity 0.3s;
+        }
+        .custom-marker:hover { transform: scale(1.1); }
+        .custom-marker.hidden { opacity: 0; pointer-events: none; transform: scale(0); }
+        
+        .marker-ev { background: #10b981; }
+        .marker-food { background: #f59e0b; }
+        .marker-building { background: #3b82f6; }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <div class="top-bar">
+        <svg style="width:20px;height:20px;margin-right:12px;color:#6b7280" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        <input type="text" id="searchInput" placeholder="Suchen (z.B. Gebäude A, Mensa)...">
+    </div>
+
+    <div class="poi-chips" id="filterContainer">
+        <div class="chip active" data-filter="all">Alle anzeigen</div>
+        <div class="chip" data-filter="ev">⚡ E-Ladesäulen</div>
+        <div class="chip" data-filter="food">🍽️ Mensa</div>
+        <div class="chip" data-filter="building">🏢 Gebäude</div>
+    </div>
+
+    <div class="bottom-panel" id="infoPanel">
+        <div class="panel-header">
+            <div>
+                <div class="panel-title" id="poiTitle">Titel</div>
+                <div class="panel-subtitle" id="poiSub">Subtitel</div>
+            </div>
+            <button class="close-btn" onclick="closePanel()">✕</button>
+        </div>
+        <button class="btn-nav" onclick="startNavigation()">
+            <svg style="width:20px;height:20px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+            Navigation starten
+        </button>
+    </div>
+
+    <script>
+        const campusCenter = [9.2185, 49.1455];
+
+        // 1. KARTE INITIALISIEREN
+        const map = new maplibregl.Map({
+            container: 'map',
+            center: campusCenter,
+            zoom: 16.5,
+            minZoom: 15.5,
+            maxBounds: [[9.2130, 49.1420], [9.2240, 49.1490]],
+            pitch: 60,
+            bearing: -45,
+            style: {
+                version: 8,
+                sources: {},
+                layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#e2e8f0' } }]
+            }
+        });
+
+        // 2. DATEN: GEBÄUDE (Erweitert mit Titel & Info für den Klick auf 3D-Modelle)
+        const mockBuildings = {
+            'type': 'FeatureCollection',
+            'features': [
+                {
+                    'type': 'Feature',
+                    'properties': { 'title': 'Gebäude T', 'sub': 'Bibliothek & Lernräume', 'height': 25, 'color': '#ffffff' },
+                    'geometry': { 'type': 'Polygon', 'coordinates': [[[9.2175, 49.1445], [9.2195, 49.1445], [9.2195, 49.1465], [9.2175, 49.1465], [9.2175, 49.1445]]] }
+                },
+                {
+                    'type': 'Feature',
+                    'properties': { 'title': 'Gebäude A', 'sub': 'Haupteingang & Empfang', 'height': 15, 'color': '#ffffff' },
+                    'geometry': { 'type': 'Polygon', 'coordinates': [[[9.2140, 49.1450], [9.2160, 49.1450], [9.2160, 49.1470], [9.2140, 49.1470], [9.2140, 49.1450]]] }
+                },
+                {
+                    'type': 'Feature',
+                    'properties': { 'title': 'Mensa', 'sub': 'Betriebsrestaurant', 'height': 12, 'color': '#f8fafc' },
+                    'geometry': { 'type': 'Polygon', 'coordinates': [[[9.2205, 49.1475], [9.2225, 49.1475], [9.2225, 49.1495], [9.2205, 49.1495], [9.2205, 49.1475]]] }
+                }
+            ]
+        };
+
+        // 3. DATEN: POIs (Erweitert mit Such-Keywords)
+        const pois = [
+            { id: 1, type: 'ev', coords: [9.2165, 49.1435], title: 'E-Ladesäule P1', sub: '4 Plätze frei • 22kW', icon: '⚡', keywords: 'laden strom auto parken' },
+            { id: 2, type: 'food', coords: [9.2215, 49.1485], title: 'Mensa Bildungscampus', sub: 'Geöffnet bis 14:00 Uhr', icon: '🍽️', keywords: 'essen kantine food' },
+            { id: 3, type: 'building', coords: [9.2185, 49.1455], title: 'Gebäude T', sub: 'Bibliothek & Lernräume', icon: '🏢', keywords: 't liv lernen' },
+            { id: 4, type: 'building', coords: [9.2150, 49.1460], title: 'Gebäude A', sub: 'Haupteingang & Empfang', icon: '🏢', keywords: 'a haupt empfang' }
+        ];
+
+        let activeMarkers = [];
+
+        map.on('load', () => {
+            // Boden
+            map.addSource('campus-ground', {
+                'type': 'geojson',
+                'data': { 'type': 'Feature', 'geometry': { 'type': 'Polygon', 'coordinates': [[[9.2100, 49.1350], [9.2300, 49.1350], [9.2300, 49.1550], [9.2100, 49.1550], [9.2100, 49.1350]]] } }
+            });
+            map.addLayer({ 'id': 'ground-layer', 'type': 'fill', 'source': 'campus-ground', 'paint': { 'fill-color': '#dcfce7' } });
+
+            // 3D Gebäude Layer
+            map.addSource('buildings', { 'type': 'geojson', 'data': mockBuildings });
+            map.addLayer({
+                'id': '3d-buildings',
+                'type': 'fill-extrusion',
+                'source': 'buildings',
+                'paint': {
+                    'fill-extrusion-color': ['get', 'color'],
+                    'fill-extrusion-height': ['get', 'height'],
+                    'fill-extrusion-base': 0,
+                    'fill-extrusion-opacity': 0.9
+                }
+            });
+
+            // Mache 3D Gebäude klickbar
+            map.on('click', '3d-buildings', (e) => {
+                const props = e.features[0].properties;
+                openPanel(props.title, props.sub, e.lngLat.toArray());
+            });
+
+            // Mauszeiger ändern, wenn man über ein Gebäude hovert
+            map.on('mouseenter', '3d-buildings', () => { map.getCanvas().style.cursor = 'pointer'; });
+            map.on('mouseleave', '3d-buildings', () => { map.getCanvas().style.cursor = ''; });
+
+            renderMarkers();
+            addMockRoute();
+        });
+
+        // --------------------------------------------------------
+        // FUNKTIONEN FÜR MARKER, UI & INTERAKTION
+        // --------------------------------------------------------
+
+        function renderMarkers() {
+            pois.forEach(poi => {
+                const el = document.createElement('div');
+                el.className = `custom-marker marker-${poi.type}`;
+                el.innerHTML = `<span style="color:white; font-size:14px;">${poi.icon}</span>`;
+
+                el.addEventListener('click', () => {
+                    openPanel(poi.title, poi.sub, poi.coords);
+                });
+
+                const marker = new maplibregl.Marker(el).setLngLat(poi.coords).addTo(map);
+                activeMarkers.push({ data: poi, element: el, mapboxMarker: marker });
+            });
+        }
+
+        // Info-Panel öffnen und Kamera animieren
+        let currentTargetCoords = null; // Speichert Ziel für Navigation
+        
+        function openPanel(title, sub, coords) {
+            document.getElementById('poiTitle').innerText = title;
+            document.getElementById('poiSub').innerText = sub;
+            document.getElementById('infoPanel').classList.add('visible');
+            currentTargetCoords = coords;
+            
+            map.flyTo({ center: coords, zoom: 17.5, pitch: 65, duration: 1500 });
+            
+            // Verstecke Route falls aktiv
+            if (map.getLayer('route')) map.setLayoutProperty('route', 'visibility', 'none');
+        }
+
+        function closePanel() {
+            document.getElementById('infoPanel').classList.remove('visible');
+            map.flyTo({ center: campusCenter, zoom: 16.5, pitch: 60 });
+            if (map.getLayer('route')) map.setLayoutProperty('route', 'visibility', 'none');
+        }
+
+        // --- FILTER LOGIK (CHIPS) ---
+        document.querySelectorAll('.chip').forEach(chip => {
+            chip.addEventListener('click', (e) => {
+                // UI Update
+                document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+                e.target.classList.add('active');
+
+                // Marker filtern
+                const filterType = e.target.getAttribute('data-filter');
+                activeMarkers.forEach(item => {
+                    if (filterType === 'all' || item.data.type === filterType) {
+                        item.element.classList.remove('hidden');
+                    } else {
+                        item.element.classList.add('hidden');
+                    }
+                });
+            });
+        });
+
+        // --- LIVE SUCHE LOGIK ---
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            if (query.length < 2) return; // Erst ab 2 Zeichen suchen
+
+            // POIs durchsuchen (Titel oder Keywords)
+            const match = pois.find(p => 
+                p.title.toLowerCase().includes(query) || 
+                p.keywords.includes(query)
+            );
+
+            if (match) {
+                openPanel(match.title, match.sub, match.coords);
+            }
+        });
+
+        // --- NAVIGATION MOCK ---
+        function addMockRoute() {
+            map.addSource('route', {
+                'type': 'geojson',
+                'data': { 'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': [] } }
+            });
+            map.addLayer({
+                'id': 'route',
+                'type': 'line',
+                'source': 'route',
+                'layout': { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
+                'paint': { 'line-color': '#0066ff', 'line-width': 6, 'line-opacity': 0.8 }
+            });
+        }
+
+        function startNavigation() {
+            document.getElementById('infoPanel').classList.remove('visible');
+            
+            // Simuliere dynamische Route vom Startpunkt zum Ziel
+            if(currentTargetCoords) {
+                const start = [9.2135, 49.1425]; // Fiktiver Start (z.B. User GPS)
+                map.getSource('route').setData({
+                    'type': 'Feature',
+                    'geometry': { 'type': 'LineString', 'coordinates': [start, currentTargetCoords] }
+                });
+            }
+
+            map.setLayoutProperty('route', 'visibility', 'visible');
+            map.flyTo({ center: [9.2165, 49.1440], zoom: 18.2, pitch: 70, bearing: -30, speed: 0.5 });
+        }
+    </script>
+</body>
+</html>
