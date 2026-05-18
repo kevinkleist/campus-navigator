@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>3D Campus Navigation - Staffbase Fullscreen</title>
+    <title>3D Campus Navigation - Final Fix</title>
     
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
@@ -12,154 +12,129 @@
     <style>
         :root {
             --primary: #0066ff;
+            --primary-light: #eff6ff;
             --surface: #ffffff;
-            --text: #111827;
-            --text-light: #6b7280;
+            --background: #e2e8f0;
+            --text-main: #111827;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
             --safe-top: env(safe-area-inset-top, 20px);
             --safe-bottom: env(safe-area-inset-bottom, 20px);
         }
 
-        /* * FULLSCREEN WEBVIEW FIXES 
-         * Dies tackert den Container absolut an die Ränder des iFrames
-         * und füllt ihn zu 100%.
-         */
-        * { 
-            box-sizing: border-box; 
-            margin: 0; 
-            padding: 0; 
-            font-family: 'Inter', sans-serif;
-            -webkit-tap-highlight-color: transparent;
-        }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        
         html, body { 
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            width: 100%; 
-            /* Dieser Hack ist entscheidend für iOS WebViews */
-            height: 100dvh; /* Dynamic Viewport Height */
-            min-height: -webkit-fill-available; /* Füllt die Safe Area auf iOS */
-            overflow: hidden; 
-            background-color: #f3f4f6; /* Standardboden */
-            user-select: none;
-            -webkit-user-select: none;
-            overscroll-behavior: none; /* Verhindert Pull-to-Refresh in WebViews */
-            -webkit-touch-callout: none; /* Deaktiviert das Halten-Menü auf iOS */
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100dvh; 
+            overflow: hidden; background-color: var(--background); user-select: none; -webkit-user-select: none; 
         }
 
-        #map { 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
+        #map { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        /* Search & Top UI */
+        .search-container {
+            position: absolute; top: max(var(--safe-top), 15px); left: 50%; transform: translateX(-50%);
+            width: 92%; max-width: 500px; z-index: 20; pointer-events: none; /* Container blockiert keine Klicks */
         }
 
-        /* Search Bar: Etwas tiefer setzen, da iFrame unter Kopfzeile beginnt */
         .top-bar {
-            position: absolute; 
-            top: 20px; /* Tieferer Abstand, da iFrame unter der Staffbase-Kopfzeile beginnt */
-            left: 50%; 
-            transform: translateX(-50%);
-            width: 92%; 
-            max-width: 500px; 
-            z-index: 10;
-            background: var(--surface); 
-            border-radius: 14px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            display: flex; 
-            padding: 14px 16px; 
-            align-items: center;
+            background: var(--surface); border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex; padding: 14px 16px; align-items: center; position: relative; z-index: 21; pointer-events: auto;
         }
-        .top-bar input { 
-            border: none; outline: none; width: 100%; 
-            font-size: 16px; background: transparent; color: var(--text);
-            user-select: auto; -webkit-user-select: auto;
-        }
+        
+        .top-bar input { border: none; outline: none; width: 100%; font-size: 16px; background: transparent; color: var(--text-main); user-select: auto; -webkit-user-select: auto; }
 
-        /* Filter Chips: Unter der Suchleiste */
+        /* Dropdown Results */
+        .search-results {
+            position: absolute; top: 100%; left: 0; width: 100%; background: var(--surface); 
+            border-radius: 0 0 14px 14px; box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+            margin-top: -10px; padding-top: 10px; max-height: 250px; overflow-y: auto; display: none; z-index: 20; pointer-events: auto;
+        }
+        .search-results.active { display: block; }
+        .result-item { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .result-item:last-child { border-bottom: none; }
+        .result-item:active { background: var(--primary-light); }
+        .result-title { font-weight: 600; font-size: 15px; color: var(--text-main); }
+        .result-sub { font-size: 12px; color: var(--text-muted); }
+
+        /* Filter Chips - Jetzt als echte Buttons für WebView-Kompatibilität */
         .poi-chips {
-            position: absolute; 
-            top: 85px; /* Positioniert unter der Suchleiste (20px top + ~65px bar) */
-            left: 0; 
-            width: 100%; 
-            z-index: 10;
-            display: flex; 
-            gap: 10px; 
-            overflow-x: auto; 
-            padding: 5px 4% 15px 4%; 
-            scrollbar-width: none;
-            -webkit-overflow-scrolling: touch;
+            position: absolute; top: calc(max(var(--safe-top), 15px) + 65px); left: 0; width: 100%; 
+            z-index: 10; display: flex; gap: 10px; overflow-x: auto; padding: 5px 4% 15px 4%; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+            pointer-events: none; /* Container selbst blockiert keine Klicks auf die Map */
         }
         .poi-chips::-webkit-scrollbar { display: none; }
         .chip {
-            background: var(--surface); padding: 10px 16px; border-radius: 20px;
-            font-size: 14px; font-weight: 500; white-space: nowrap;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; 
-            transition: all 0.2s ease; color: var(--text);
+            background: var(--surface); padding: 10px 16px; border-radius: 20px; font-size: 14px; font-weight: 500; 
+            white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: 0.2s; color: var(--text-main);
+            border: none; outline: none; pointer-events: auto; /* Buttons sind anklickbar */
         }
-        .chip:active { transform: scale(0.95); }
         .chip.active { background: var(--primary); color: white; }
 
-        /* Bottom Panel */
+        /* Bottom Info Panel */
         .bottom-panel {
-            position: absolute; 
-            bottom: -150%; 
-            left: 0; 
-            width: 100%;
-            background: var(--surface); 
-            border-radius: 24px 24px 0 0;
-            /* Standard-Padding, da iFrame auf einer Seite läuft, safe-bottom ist 0 */
-            padding: 24px 20px 24px 20px; 
-            z-index: 20; 
-            box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
-            transition: bottom 0.4s cubic-bezier(0.3, 1, 0.3, 1);
+            position: absolute; bottom: -150%; left: 0; width: 100%; max-height: 80vh; display: flex; flex-direction: column;
+            background: var(--surface); border-radius: 24px 24px 0 0; padding: 24px 20px max(var(--safe-bottom), 24px) 20px; 
+            z-index: 30; box-shadow: 0 -4px 24px rgba(0,0,0,0.15); transition: bottom 0.4s cubic-bezier(0.3, 1, 0.3, 1);
         }
         .bottom-panel.visible { bottom: 0; }
-        .panel-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-        .panel-title { font-size: 20px; font-weight: 600; color: var(--text); }
-        .panel-subtitle { font-size: 15px; color: var(--text-light); margin-top: 4px; }
-        .close-btn { 
-            background: #f3f4f6; border: none; border-radius: 50%; 
-            width: 36px; height: 36px; cursor: pointer; display: flex; 
-            align-items: center; justify-content: center; font-size: 16px; 
-        }
+        .panel-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-shrink: 0;}
+        .panel-title { font-size: 20px; font-weight: 600; color: var(--text-main); }
+        .panel-subtitle { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+        .close-btn { background: var(--background); border: none; border-radius: 50%; width: 36px; height: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        
         .btn-nav {
-            width: 100%; background: var(--primary); color: white; border: none;
-            padding: 16px; border-radius: 14px; font-size: 16px; font-weight: 600; 
-            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+            width: 100%; background: var(--primary); color: white; border: none; padding: 16px; border-radius: 14px; font-size: 16px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; flex-shrink: 0;
         }
 
-        /* Markers */
-        .custom-marker {
-            width: 36px; height: 36px; background: var(--primary);
-            border: 3px solid white; border-radius: 50%; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-            display: flex; align-items: center; justify-content: center; cursor: pointer;
-            transition: transform 0.2s, opacity 0.3s;
+        /* Routing Steps */
+        .route-steps-container {
+            display: none; margin-top: 20px; overflow-y: auto; padding-right: 10px; border-top: 1px solid var(--border); padding-top: 16px;
         }
-        .custom-marker.hidden { opacity: 0; pointer-events: none; transform: scale(0); }
-        
+        .route-steps-container.active { display: block; }
+        .route-step { display: flex; gap: 12px; margin-bottom: 16px; }
+        .step-icon { background: var(--primary-light); color: var(--primary); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0;}
+        .step-text { font-size: 15px; color: var(--text-main); line-height: 1.4; padding-top: 4px;}
+
+        /* Custom Markers */
+        .custom-marker {
+            width: 36px; height: 36px; border: 3px solid white; border-radius: 50%; box-shadow: 0 4px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s; position: relative; z-index: 5;
+            pointer-events: auto;
+        }
+        .custom-marker:hover { transform: scale(1.1); }
         .marker-ev { background: #10b981; }
         .marker-food { background: #f59e0b; }
         .marker-building { background: #3b82f6; }
+
+        /* User GPS Position Marker */
+        .user-location {
+            width: 20px; height: 20px; background: #0066ff; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(0,102,255,0.5); position: relative;
+            pointer-events: none; /* Blockiert keine Klicks */
+        }
+        .user-location::after {
+            content: ''; position: absolute; top: -10px; left: -10px; width: 34px; height: 34px; background: rgba(0,102,255,0.4); border-radius: 50%; animation: pulse 2s infinite ease-out;
+        }
+        @keyframes pulse { 0% { transform: scale(0.5); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
+
     </style>
 </head>
 <body>
 
     <div id="map"></div>
 
-    <div class="top-bar">
-        <svg style="width:20px;height:20px;margin-right:12px;color:#6b7280;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-        <input type="text" id="searchInput" placeholder="Suchen (z.B. Gebäude A)...">
+    <div class="search-container">
+        <div class="top-bar">
+            <svg style="width:20px;height:20px;margin-right:12px;color:var(--text-muted);flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            <input type="text" id="searchInput" placeholder="Suchen (Gebäude, Mensa...)">
+        </div>
+        <div id="searchResults" class="search-results"></div>
     </div>
 
     <div class="poi-chips" id="filterContainer">
-        <div class="chip active" data-filter="all">Alle</div>
-        <div class="chip" data-filter="ev">⚡ Ladesäulen</div>
-        <div class="chip" data-filter="food">🍽️ Mensa</div>
-        <div class="chip" data-filter="building">🏢 Gebäude</div>
+        <button class="chip active" data-filter="all">Alle anzeigen</button>
+        <button class="chip" data-filter="building">🏢 Gebäude</button>
+        <button class="chip" data-filter="food">🍽️ Gastronomie</button>
+        <button class="chip" data-filter="ev">⚡ Ladesäulen</button>
     </div>
 
     <div class="bottom-panel" id="infoPanel">
@@ -170,168 +145,244 @@
             </div>
             <button class="close-btn" onclick="closePanel()">✕</button>
         </div>
-        <button class="btn-nav" onclick="startNavigation()">
+        
+        <button class="btn-nav" id="navBtn" onclick="startNavigation()">
             <svg style="width:20px;height:20px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
             Navigation starten
         </button>
+
+        <div class="route-steps-container" id="routeSteps"></div>
     </div>
 
     <script>
+        // 1. ZENTRUM & BENUTZER STANDORT
         const campusCenter = [9.2185, 49.1455];
+        const userLocation = [9.2135, 49.1435]; 
 
         const map = new maplibregl.Map({
             container: 'map',
             center: campusCenter,
-            zoom: 16.5,
-            minZoom: 15.5,
-            maxBounds: [[9.2130, 49.1420], [9.2240, 49.1490]],
+            zoom: 16,
+            minZoom: 14,
+            maxBounds: [[9.2000, 49.1300], [9.2350, 49.1600]],
             pitch: 60,
             bearing: -45,
-            style: {
-                version: 8,
-                sources: {},
-                layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#e2e8f0' } }]
-            }
+            style: { version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#e2e8f0' } }] }
         });
 
-        // WICHTIG FÜR MOBILE WEBVIEWS: Bei Resize (z.B. Tastatur einblenden) Karte updaten
         window.addEventListener('resize', () => map.resize());
-        map.on('dragstart', () => { document.activeElement.blur(); });
 
+        // 2. ERWEITERTE DATEN (Gebäude 3D)
         const mockBuildings = {
             'type': 'FeatureCollection',
             'features': [
-                {
-                    'type': 'Feature',
-                    'properties': { 'title': 'Gebäude T', 'sub': 'Bibliothek & Lernräume', 'height': 25, 'color': '#ffffff' },
-                    'geometry': { 'type': 'Polygon', 'coordinates': [[[9.2175, 49.1445], [9.2195, 49.1445], [9.2195, 49.1465], [9.2175, 49.1465], [9.2175, 49.1445]]] }
-                },
-                {
-                    'type': 'Feature',
-                    'properties': { 'title': 'Gebäude A', 'sub': 'Haupteingang & Empfang', 'height': 15, 'color': '#ffffff' },
-                    'geometry': { 'type': 'Polygon', 'coordinates': [[[9.2140, 49.1450], [9.2160, 49.1450], [9.2160, 49.1470], [9.2140, 49.1470], [9.2140, 49.1450]]] }
-                },
-                {
-                    'type': 'Feature',
-                    'properties': { 'title': 'Mensa', 'sub': 'Betriebsrestaurant', 'height': 12, 'color': '#f8fafc' },
-                    'geometry': { 'type': 'Polygon', 'coordinates': [[[9.2205, 49.1475], [9.2225, 49.1475], [9.2225, 49.1495], [9.2205, 49.1495], [9.2205, 49.1475]]] }
-                }
+                { properties: { title: 'Gebäude T', sub: 'Bibliothek & Lernräume', height: 25, color: '#ffffff' }, geometry: { type: 'Polygon', coordinates: [[[9.2175, 49.1445], [9.2195, 49.1445], [9.2195, 49.1465], [9.2175, 49.1465], [9.2175, 49.1445]]] }},
+                { properties: { title: 'Gebäude A', sub: 'Haupteingang & Empfang', height: 15, color: '#ffffff' }, geometry: { type: 'Polygon', coordinates: [[[9.2140, 49.1450], [9.2160, 49.1450], [9.2160, 49.1470], [9.2140, 49.1470], [9.2140, 49.1450]]] }},
+                { properties: { title: 'Mensa', sub: 'Betriebsrestaurant', height: 12, color: '#f8fafc' }, geometry: { type: 'Polygon', coordinates: [[[9.2205, 49.1475], [9.2225, 49.1475], [9.2225, 49.1495], [9.2205, 49.1495], [9.2205, 49.1475]]] }},
+                { properties: { title: 'Hörsaalzentrum B', sub: 'Vorlesungssäle 1-10', height: 18, color: '#f1f5f9' }, geometry: { type: 'Polygon', coordinates: [[[9.2180, 49.1470], [9.2195, 49.1470], [9.2195, 49.1490], [9.2180, 49.1490], [9.2180, 49.1470]]] }},
+                { properties: { title: 'Forschung C', sub: 'Laboratorien', height: 22, color: '#f8fafc' }, geometry: { type: 'Polygon', coordinates: [[[9.2155, 49.1420], [9.2170, 49.1420], [9.2170, 49.1440], [9.2155, 49.1440], [9.2155, 49.1420]]] }},
+                { properties: { title: 'Parkhaus P1', sub: 'Mitarbeiter Parkplätze', height: 10, color: '#cbd5e1' }, geometry: { type: 'Polygon', coordinates: [[[9.2125, 49.1425], [9.2145, 49.1425], [9.2145, 49.1440], [9.2125, 49.1440], [9.2125, 49.1425]]] }}
             ]
         };
 
+        // RUNDE MARKER POIs
         const pois = [
-            { id: 1, type: 'ev', coords: [9.2165, 49.1435], title: 'E-Ladesäule P1', sub: '4 Plätze frei • 22kW', icon: '⚡', keywords: 'laden strom auto parken' },
-            { id: 2, type: 'food', coords: [9.2215, 49.1485], title: 'Mensa Bildungscampus', sub: 'Geöffnet bis 14:00 Uhr', icon: '🍽️', keywords: 'essen kantine food' },
-            { id: 3, type: 'building', coords: [9.2185, 49.1455], title: 'Gebäude T', sub: 'Bibliothek & Lernräume', icon: '🏢', keywords: 't liv lernen' },
-            { id: 4, type: 'building', coords: [9.2150, 49.1460], title: 'Gebäude A', sub: 'Haupteingang & Empfang', icon: '🏢', keywords: 'a haupt empfang' }
+            { id: 1, type: 'building', coords: [9.2185, 49.1455], title: 'Gebäude T (Liv)', sub: 'Zentrale Bibliothek', icon: '🏢', keywords: 't liv bibliothek lernen' },
+            { id: 2, type: 'building', coords: [9.2150, 49.1460], title: 'Gebäude A', sub: 'Haupteingang & Empfang', icon: '🏢', keywords: 'a haupt empfang' },
+            { id: 3, type: 'building', coords: [9.2188, 49.1480], title: 'Hörsaalzentrum B', sub: 'Vorlesungssäle 1-10', icon: '🎓', keywords: 'b hörsaal vorlesung' },
+            { id: 4, type: 'food', coords: [9.2215, 49.1485], title: 'Hauptmensa', sub: 'Täglich warme Speisen bis 14:00', icon: '🍽️', keywords: 'essen kantine food mensa mittag' },
+            { id: 5, type: 'food', coords: [9.2160, 49.1455], title: 'Cafeteria A', sub: 'Kaffee & Snacks bis 16:00', icon: '☕', keywords: 'kaffee snack cafe' },
+            { id: 6, type: 'ev', coords: [9.2135, 49.1430], title: 'Ladesäulen P1', sub: '6 Plätze frei • 22kW', icon: '⚡', keywords: 'laden strom auto parken p1' },
+            { id: 7, type: 'ev', coords: [9.2190, 49.1495], title: 'Ladesäulen Nord', sub: '2 Plätze frei • 50kW', icon: '⚡', keywords: 'laden strom auto nord' },
         ];
 
         let activeMarkers = [];
+        let currentTargetPoi = null;
 
         map.on('load', () => {
-            map.addSource('campus-ground', {
-                'type': 'geojson',
-                'data': { 'type': 'Feature', 'geometry': { 'type': 'Polygon', 'coordinates': [[[9.2100, 49.1350], [9.2300, 49.1350], [9.2300, 49.1550], [9.2100, 49.1350]]] } }
-            });
+            // Rasenfläche
+            map.addSource('campus-ground', { 'type': 'geojson', 'data': { 'type': 'Feature', 'geometry': { 'type': 'Polygon', 'coordinates': [[[9.2000, 49.1300], [9.2350, 49.1300], [9.2350, 49.1600], [9.2000, 49.1600], [9.2000, 49.1300]]] } } });
             map.addLayer({ 'id': 'ground-layer', 'type': 'fill', 'source': 'campus-ground', 'paint': { 'fill-color': '#dcfce7' } });
 
+            // 3D Gebäude
             map.addSource('buildings', { 'type': 'geojson', 'data': mockBuildings });
-            map.addLayer({
-                'id': '3d-buildings',
-                'type': 'fill-extrusion',
-                'source': 'buildings',
-                'paint': {
-                    'fill-extrusion-color': ['get', 'color'],
-                    'fill-extrusion-height': ['get', 'height'],
-                    'fill-extrusion-base': 0,
-                    'fill-extrusion-opacity': 0.9
-                }
+            map.addLayer({ 'id': '3d-buildings', 'type': 'fill-extrusion', 'source': 'buildings', 'paint': { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': ['get', 'height'], 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.95 } });
+
+            // Klick-Logik auf die 3D Gebäude-Blöcke
+            map.on('click', '3d-buildings', (e) => {
+                if (!e.features || e.features.length === 0) return;
+                const props = e.features[0].properties;
+                const buildingPoi = {
+                    title: props.title,
+                    sub: props.sub,
+                    coords: e.lngLat.toArray()
+                };
+                openPanel(buildingPoi);
             });
 
-            map.on('click', '3d-buildings', (e) => {
-                const props = e.features[0].properties;
-                openPanel(props.title, props.sub, e.lngLat.toArray());
-            });
+            // Mauszeiger über Gebäude
+            map.on('mouseenter', '3d-buildings', () => { map.getCanvas().style.cursor = 'pointer'; });
+            map.on('mouseleave', '3d-buildings', () => { map.getCanvas().style.cursor = ''; });
 
             renderMarkers();
-            addMockRoute();
+            addUserLocation();
+            initRoutingLayer();
         });
 
+        function addUserLocation() {
+            const el = document.createElement('div');
+            el.className = 'user-location';
+            new maplibregl.Marker(el).setLngLat(userLocation).addTo(map);
+        }
+
+        // 3. MARKER LOGIK (Robuster Event-Handler für Mobile)
         function renderMarkers() {
             pois.forEach(poi => {
                 const el = document.createElement('div');
                 el.className = `custom-marker marker-${poi.type}`;
                 el.innerHTML = `<span style="color:white; font-size:16px;">${poi.icon}</span>`;
 
-                el.addEventListener('click', () => { openPanel(poi.title, poi.sub, poi.coords); });
+                const handleMarkerClick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation(); // Stoppt das Durchdrücken auf die Karte
+                    openPanel(poi);
+                };
+
+                // Sowohl Klick als auch Touch-Events binden
+                el.addEventListener('click', handleMarkerClick);
+                el.addEventListener('touchstart', handleMarkerClick, { passive: false });
+
                 const marker = new maplibregl.Marker(el).setLngLat(poi.coords).addTo(map);
-                activeMarkers.push({ data: poi, element: el, mapboxMarker: marker });
+                activeMarkers.push({ data: poi, markerObj: marker, element: el });
             });
         }
 
-        let currentTargetCoords = null;
-        
-        function openPanel(title, sub, coords) {
-            document.activeElement.blur(); 
-            document.getElementById('poiTitle').innerText = title;
-            document.getElementById('poiSub').innerText = sub;
-            document.getElementById('infoPanel').classList.add('visible');
-            currentTargetCoords = coords;
+        // 4. FILTER BUTTONS (Nutzt jetzt MapLibre Native Remove/Add)
+        const filterButtons = document.querySelectorAll('.chip');
+        filterButtons.forEach(btn => {
+            // Auch hier Klick + Touchstart zur Sicherheit
+            const handleFilterClick = function(e) {
+                e.preventDefault();
+                filterButtons.forEach(c => c.classList.remove('active'));
+                this.classList.add('active');
+
+                const filterType = this.getAttribute('data-filter');
+                
+                activeMarkers.forEach(item => {
+                    // Entferne den Marker sicher von der Karte
+                    item.markerObj.remove();
+
+                    // Füge ihn wieder hinzu, wenn der Filter passt
+                    if (filterType === 'all' || item.data.type === filterType) {
+                        item.markerObj.addTo(map);
+                    }
+                });
+            };
+
+            btn.addEventListener('click', handleFilterClick);
+            btn.addEventListener('touchstart', handleFilterClick, { passive: false });
+        });
+
+        // 5. SUCHEN MIT DROPDOWN
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            searchResults.innerHTML = '';
             
-            map.flyTo({ center: coords, zoom: 17.2, pitch: 55, duration: 1200 });
+            if (query.length < 2) {
+                searchResults.classList.remove('active');
+                return;
+            }
+
+            const matches = pois.filter(p => p.title.toLowerCase().includes(query) || p.keywords.includes(query));
+            
+            if (matches.length > 0) {
+                searchResults.classList.add('active');
+                matches.forEach(match => {
+                    const div = document.createElement('div');
+                    div.className = 'result-item';
+                    div.innerHTML = `<span style="font-size:18px;">${match.icon}</span><div><div class="result-title">${match.title}</div><div class="result-sub">${match.sub}</div></div>`;
+                    
+                    const handleSearchClick = (ev) => {
+                        ev.preventDefault();
+                        searchInput.value = match.title;
+                        searchResults.classList.remove('active');
+                        document.activeElement.blur();
+                        openPanel(match);
+                    };
+
+                    div.addEventListener('click', handleSearchClick);
+                    div.addEventListener('touchstart', handleSearchClick, { passive: false });
+                    searchResults.appendChild(div);
+                });
+            } else {
+                searchResults.classList.remove('active');
+            }
+        });
+
+        // 6. BOTTOM PANEL & ROUTING
+        const infoPanel = document.getElementById('infoPanel');
+        const routeStepsContainer = document.getElementById('routeSteps');
+        const navBtn = document.getElementById('navBtn');
+
+        function openPanel(poi) {
+            currentTargetPoi = poi;
+            document.getElementById('poiTitle').innerText = poi.title;
+            document.getElementById('poiSub').innerText = poi.sub;
+            
+            // Reset UI
+            routeStepsContainer.classList.remove('active');
+            navBtn.style.display = 'flex';
+            infoPanel.classList.add('visible');
+            
+            map.flyTo({ center: poi.coords, zoom: 17.5, pitch: 60, duration: 1200 });
             if (map.getLayer('route')) map.setLayoutProperty('route', 'visibility', 'none');
         }
 
         function closePanel() {
-            document.getElementById('infoPanel').classList.remove('visible');
-            map.flyTo({ center: campusCenter, zoom: 16.5, pitch: 60 });
+            infoPanel.classList.remove('visible');
+            currentTargetPoi = null;
             if (map.getLayer('route')) map.setLayoutProperty('route', 'visibility', 'none');
+            map.flyTo({ center: campusCenter, zoom: 16, pitch: 50 });
         }
 
-        document.querySelectorAll('.chip').forEach(chip => {
-            chip.addEventListener('click', (e) => {
-                document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-                e.target.classList.add('active');
-
-                const filterType = e.target.getAttribute('data-filter');
-                activeMarkers.forEach(item => {
-                    if (filterType === 'all' || item.data.type === filterType) {
-                        item.element.classList.remove('hidden');
-                    } else {
-                        item.element.classList.add('hidden');
-                    }
-                });
-            });
-        });
-
-        document.getElementById('searchInput').addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase().trim();
-            if (query.length < 2) return;
-
-            const match = pois.find(p => p.title.toLowerCase().includes(query) || p.keywords.includes(query));
-            if (match) openPanel(match.title, match.sub, match.coords);
-        });
-
-        function addMockRoute() {
+        function initRoutingLayer() {
             map.addSource('route', { 'type': 'geojson', 'data': { 'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': [] } } });
-            map.addLayer({
-                'id': 'route', 'type': 'line', 'source': 'route',
-                'layout': { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
-                'paint': { 'line-color': '#0066ff', 'line-width': 6, 'line-opacity': 0.8 }
-            });
+            map.addLayer({ 'id': 'route', 'type': 'line', 'source': 'route', 'layout': { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' }, 'paint': { 'line-color': '#0066ff', 'line-width': 6, 'line-opacity': 0.8 } });
         }
 
         function startNavigation() {
-            document.getElementById('infoPanel').classList.remove('visible');
-            if(currentTargetCoords) {
-                const start = [9.2135, 49.1425]; 
-                map.getSource('route').setData({
-                    'type': 'Feature',
-                    'geometry': { 'type': 'LineString', 'coordinates': [start, currentTargetCoords] }
-                });
-            }
+            if(!currentTargetPoi) return;
+
+            map.getSource('route').setData({
+                'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': [userLocation, currentTargetPoi.coords] }
+            });
             map.setLayoutProperty('route', 'visibility', 'visible');
-            map.flyTo({ center: [9.2165, 49.1440], zoom: 17.5, pitch: 65, bearing: -30, speed: 0.6 });
+
+            const midLng = (userLocation[0] + currentTargetPoi.coords[0]) / 2;
+            const midLat = (userLocation[1] + currentTargetPoi.coords[1]) / 2;
+            
+            map.flyTo({ center: [midLng, midLat], zoom: 16.8, pitch: 70, bearing: -20, speed: 0.8 });
+
+            navBtn.style.display = 'none';
+            routeStepsContainer.innerHTML = `
+                <div style="font-weight:600; margin-bottom:12px; color:var(--text-main);">Wegbeschreibung</div>
+                <div class="route-step">
+                    <div class="step-icon">1</div>
+                    <div class="step-text">Start am Haupteingang (Dein Standort). Folge dem Hauptweg in Richtung Zentrum.</div>
+                </div>
+                <div class="route-step">
+                    <div class="step-icon">2</div>
+                    <div class="step-text">Gehe weiter geradeaus, der blauen Linie nach.</div>
+                </div>
+                <div class="route-step">
+                    <div class="step-icon">3</div>
+                    <div class="step-text">Das Ziel <b>${currentTargetPoi.title}</b> befindet sich direkt vor dir.</div>
+                </div>
+            `;
+            routeStepsContainer.classList.add('active');
         }
     </script>
 </body>
